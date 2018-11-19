@@ -1,7 +1,5 @@
 import pyaudio
-from scipy.io import wavfile
 import numpy as np
-import matplotlib.pyplot as plt
 from sys import stdout
 
 notes = {'C': [],
@@ -27,7 +25,7 @@ def get_freq(b_data, fs):
     data = np.frombuffer(b''.join(b_data), dtype=np.int32)
     fft = np.fft.fft(data)
     p = np.absolute(fft)
-    
+
     freq = np.fft.fftfreq(np.shape(p)[0])*fs
 
     return(abs(freq[np.argmax(p)]))
