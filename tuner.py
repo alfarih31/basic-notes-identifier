@@ -3,6 +3,7 @@ import numpy as np
 from sys import stdout
 from argparse import ArgumentParser
 from msvcrt import getch, kbhit
+from time import sleep
 
 ap = ArgumentParser()
 ap.add_argument("-m", "--mode", required=True, default='m',
@@ -28,7 +29,8 @@ g_tune = [['E', 2],
             ['D', 3],
             ['G', 3],
             ['B', 3],
-            ['E', 4]]
+            ['E', 4],
+            ['-', '-']]
 with open('notes.dat', 'r') as f:
     line = f.readlines()
     for x in line:
@@ -47,7 +49,6 @@ for i in range(len(notes['C'])-1):
     temp.clear()
     temp2.clear()
 
-print(notes_std)
 def get_freq(b_data, fs):
     data = np.frombuffer(b''.join(b_data), dtype=np.int32)
     fft = np.fft.fft(data)
@@ -88,19 +89,19 @@ def check_freq(note, pitch, query):
                 target[0] = n
                 target[1] = p
         if (rd > 0):
-            command = '+'
+            command = 'Tune Up'
         elif (rd < 0):
-            command = '-'
+            command = 'Tune Down'
         else: command = 'OK'
     else:
-        if (query == 'a' or query == -1): return (note, pitch, ['a','a'], 'a')
+        if (query == 'a' or query == -1): return (note, pitch, ['-', '-'], '-')
         n, p = query
         current = notes[n][p]
         delta = current-detected
         if (delta > 0):
-            command = '+'
+            command = 'Tune Up'
         elif (delta < 0):
-            command = '-'
+            command = 'Tune Down'
         else: command = 'OK'
         target = query
 
@@ -111,14 +112,44 @@ def get_query(string):
         return(g_tune[string])
     else: return 'a'
 
+def init():
+    st = ''
+    if (args['mode'] == 'a'): st = 'AUTO'
+    else: st = 'MANUAL'
+    print('\tGUITAR TUNER')
+    sleep(0.2)
+    print('\tMode: {}\n'.format(st))
+    print('Guide:')
+    print('\t+ : Tune Up')
+    print('\t- : Tune Down')
+    print('\tOK : Fine Tuning')
+    print('\n\t#For Manual Mode:')
+    print('\t   Press string number (1 - 6) for tuning')
+    print('\n\t#For Auto Mode:')
+    print('\t   String No:')
+    print('\t     (1) Frequency: 82 Hz || Notes: E2')
+    print('\t     (2) Frequency: 110 Hz || Notes: A2')
+    print('\t     (3) Frequency:  147 Hz || Notes: D3')
+    print('\t     (4) Frequency: 196 Hz || Notes: G3')
+    print('\t     (5) Frequency: 247 Hz || Notes: B3')
+    print('\t     (6) Frequency: 330 Hz || Notes: E4')
+    i = 0
+    while i < 120:
+        print('#', end='', flush= True)
+        sleep(0.025)
+        i += 1
+        if(i == 60): print('\r')
+    print('\n')
+
 def main():
     CHUNK = 1024
     FORMAT = pyaudio.paInt32
     CHANNELS = 1
     RATE = 44100
-    SAMPLING_TIME = 0.1
+    SAMPLING_TIME = 0.25
     q = -1
     p = pyaudio.PyAudio()
+    hit = 6
 
     s_freq = [] #List for frequency sampling
     try:
@@ -135,24 +166,31 @@ def main():
 
             #Process Sound Frame
             if(kbhit()):
-                q = get_query(abs(48 - ord(getch()))-1)
+                hit = abs(48 - ord(getch()))
+                hit = hit - 1
+                q = get_query(hit)
             freq = get_freq(frames, RATE)
+            n, pt = get_note_pitch(freq)
+            if (freq >= 162 and freq <= 165):
+                freq /= 2
+                pt -= 1
             s_freq.append(freq)
-            if(len(s_freq) > 10):
-                n, p = get_note_pitch(freq)
-                if(np.std(s_freq) <= notes_std[p]*1.2):
-                    note = check_freq(n, p, q)
-                    stdout.write('Detected: {}, {}{} || Target: {}{}, {}    \r'.format(int(freq), note[0],note[1], note[2][0], note[2][1], note[3]))
+            if (len(s_freq) > 2):
+                note = check_freq(n, pt, q)
+                if (np.std(s_freq) >= notes_std[pt]*1.5):
+                    stdout.write('Measured: {:.2f}, {}{} || Target: {}{} ({}) || Guide: {}                  \r'.format(freq, note[0], note[1],
+                                                                                                                        note[2][0], note[2][1], g_tune.index(note[2])+1,
+                                                                                                                        note[3]))
                 s_freq.clear()
     except KeyboardInterrupt:
         stream.stop_stream()
         stream.close()
         p.terminate()
-        print("CLOSED")
+        print("\n\tCLOSED")
 
 
 
 if __name__ == "__main__":
+    init()
     main()
-
 
